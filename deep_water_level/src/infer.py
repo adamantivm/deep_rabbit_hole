@@ -71,7 +71,7 @@ def run_dataset_inference(model, dataset_dir, annotations_file, normalized_outpu
             (means, stds) = cv2.meanStdDev(img)
  
             print(f"Filename: {filename}, Infered: {output:.2f}, Actual: {depth.item():.2f}, Error: {error:.2f}, mean: {means[0][0]:.2f}, std: {stds[0][0]:.2f}")
-            mse += error**2
+            mse += error**4
         mse /= len(images)
         print(f"MSE ({i}): {mse}")
         loss += mse

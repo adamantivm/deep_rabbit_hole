@@ -123,7 +123,10 @@ def do_training(
                 inputs = inputs.to(device)
                 labels = labels.to(device)
                 outputs = model(inputs)
-                loss = criterion(outputs, labels)
+                # For the test loss, we can calculate the average of the
+                # difference to the fourth power, so as to further penalize
+                # errors larger than 1
+                loss = torch.mean((outputs - labels) ** 4)
                 test_loss += loss.item()
 
         test_loss /= len(test_data)
