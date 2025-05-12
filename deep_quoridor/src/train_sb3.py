@@ -55,33 +55,38 @@ class SwapPlayerCallback(BaseCallback):
         self.last_wins = 0
         self.last_total_games = 0
 
-    @override
-    def _on_rollout_start(self) -> None:
-        if self.current_opponent is None:
+        self._prepare_opponent()
+
+    def _prepare_opponent(self):
+        if self.current_opponent is None or self.current_opponent_rollouts_left == 0:
             if len(self.opponents_config) > 0:
                 next_opponent = self.opponents_config.pop(0)
                 self.current_opponent = next_opponent
                 self.current_opponent_rollouts_left = next_opponent["rollouts"]
                 self.opponent = AgentRegistry.create_from_encoded_name(next_opponent["agent"], **self.oppponents_kwargs)
-                self.env.set_opponent(self.opponent)
-                self.env.set_player("player_0")
+            else:
+                self.current_opponent = None
+            self.env.set_opponent(self.opponent)
+
+    @override
+    def _on_rollout_start(self) -> None:
         print(
             f"Playing as {self.current_player}, against {self.current_opponent['agent']} ({self.current_opponent_rollouts_left} rollouts left)"
         )
-        if self.opponent is not None:
-            self.opponent.start_game(self.env, self.env.get_opponent(self.current_player))
 
     @override
     def _on_rollout_end(self):
+        # Switch sides
         if self.current_player == "player_0":
             self.current_player = "player_1"
         else:
             self.current_player = "player_0"
         self.env.set_player(self.current_player)
+
+        # Update opponent
         self.current_opponent_rollouts_left -= 1
-        if self.current_opponent_rollouts_left == 0:
-            self.current_opponent = None
-            self.env.set_opponent(None)
+        self._prepare_opponent()
+
         # Count the number of self.monitor.episode_returns that were positive
         total_wins = len([r for r in self.monitor.episode_returns if r > 0])
         total_games = len(self.monitor.episode_returns)
@@ -163,11 +168,7 @@ def train_action_mask(env_fn, steps=10_000, seed=0, upload_to_wandb=False, train
     )
 
     opponents_config = [
-        {"agent": "greedy:p_random=0.3", "rollouts": 100},
-        {"agent": "dexp:wandb_alias=best", "rollouts": 100},
-        {"agent": "greedy:p_random=0.3", "rollouts": 100},
-        {"agent": "simple", "rollouts": 100},
-        {"agent": "greedy:p_random=0.3", "rollouts": 100},
+        {"agent": "simple", "rollouts": 400},
     ]
 
     total_timesteps = sum(opponent["rollouts"] for opponent in opponents_config) * steps_per_rollout

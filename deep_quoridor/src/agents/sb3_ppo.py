@@ -1,3 +1,5 @@
+import traceback
+
 import torch
 from environment.dict_split_board_wrapper import DictSplitBoardWrapper
 from environment.rotate_wrapper import RotateWrapper
@@ -95,6 +97,7 @@ class SB3ActionMaskWrapper(BaseWrapper):
                 opponent_action = self.opponent.get_action(tmp_obs)
             except Exception as e:
                 print(f"Exception in opponent action: {e}. Choosing a random action instead.")
+                traceback.print_exc()
                 print("Current board state (before opponent action):")
                 print(self.env.render())
                 print(f"Last action: {action}")

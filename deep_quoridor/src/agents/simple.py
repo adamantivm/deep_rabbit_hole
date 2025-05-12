@@ -178,7 +178,7 @@ class SimpleAgent(Agent):
             self.params.discount_factor,
         )
 
-        assert game.is_action_valid(chosen_action), "The chosen action is not valid."
+        assert game.is_action_valid(chosen_action), f"The chosen action {chosen_action} is not valid."
         action_id = self.action_encoder.action_to_index(chosen_action)
         assert action_mask[action_id] == 1, "The action is not valid according to the action mask."
 

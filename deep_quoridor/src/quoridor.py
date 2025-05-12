@@ -455,7 +455,7 @@ class Quoridor:
             else:
                 is_valid = False
         else:
-            raise ValueError("Invalid action type")
+            raise ValueError(f"Invalid action type: {action}")
 
         return is_valid
 
