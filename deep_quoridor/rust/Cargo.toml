@@ -16,6 +16,10 @@ name = "create_policy_db"
 path = "src/bin/create_policy_db.rs"
 required-features = ["binary"]
 
+[[bin]]
+name = "inference"
+path = "src/bin/inference.rs"
+
 [dependencies]
 pyo3 = { version = "0.22", features = ["extension-module"], optional = true }
 numpy = { version = "0.22", optional = true }
@@ -25,6 +29,10 @@ rayon = "1.10"
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 clap = { version = "4.5", features = ["derive"], optional = true }
+anyhow = "1.0"
+candle-core = "0.9"
+candle-nn = "0.9"
+candle-datasets = "0.9"
 
 [features]
 default = ["python"]
