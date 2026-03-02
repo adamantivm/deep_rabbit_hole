@@ -7,12 +7,24 @@ import numpy as np
 import wandb
 from pydantic_yaml import parse_yaml_file_as
 from utils import Timer
-from v2.common import JobTrigger, MockWandb, ShutdownSignal, create_alphazero, upload_model
+from v2.common import (
+    JobTrigger,
+    MockWandb,
+    ShutdownSignal,
+    create_alphazero,
+    upload_model,
+)
 from v2.config import Config
 from v2.yaml_models import GameInfo, LatestModel
 
 
-def model_uploader(config: Config, every: str, model_id: str, wandb_run, shutdown_event: threading.Event):
+def model_uploader(
+    config: Config,
+    every: str,
+    model_id: str,
+    wandb_run,
+    shutdown_event: threading.Event,
+):
     LatestModel.wait_for_creation(config)
 
     trigger = JobTrigger.from_string(config, every)
@@ -32,7 +44,9 @@ def model_uploader(config: Config, every: str, model_id: str, wandb_run, shutdow
 def train(config: Config):
     batch_size = config.training.batch_size
 
-    alphazero_agent = create_alphazero(config, config.self_play.alphazero, overrides={"training_mode": True})
+    alphazero_agent = create_alphazero(
+        config, config.self_play.alphazero, overrides={"training_mode": True}
+    )
 
     upload_model_thread = None
     shutdown_event = None
@@ -55,7 +69,13 @@ def train(config: Config):
             shutdown_event = threading.Event()
             upload_model_thread = Thread(
                 target=model_uploader,
-                args=(config, config.wandb.upload_model.every, alphazero_agent.model_id(), wandb_run, shutdown_event),
+                args=(
+                    config,
+                    config.wandb.upload_model.every,
+                    alphazero_agent.model_id(),
+                    wandb_run,
+                    shutdown_event,
+                ),
             )
             upload_model_thread.start()
 
@@ -87,7 +107,9 @@ def train(config: Config):
 
     while True:
         if finish_condition and finish_condition.is_ready():
-            print(f"Trainer: reached out finish condition: {config.training.finish_after}")
+            print(
+                f"Trainer: reached out finish condition: {config.training.finish_after}"
+            )
             break
 
         if ShutdownSignal.is_set(config):
@@ -97,7 +119,11 @@ def train(config: Config):
         Timer.start("waiting-to-train", ignore_if_running=True)
 
         # Process new games: find new files, move them and extract the info used for training
-        ready = [f for f in sorted(config.paths.replay_buffers_ready.glob("*.npz")) if f.is_file()]
+        ready = [
+            f
+            for f in sorted(config.paths.replay_buffers_ready.glob("*.npz"))
+            if f.is_file()
+        ]
 
         for f in ready:
             last_game += 1
@@ -123,7 +149,9 @@ def train(config: Config):
 
         total_moves = sum(moves_per_game)
 
-        games_needed_to_train = config.training.games_per_training_step * (training_steps + 1)
+        games_needed_to_train = config.training.games_per_training_step * (
+            training_steps + 1
+        )
 
         if total_moves < batch_size or games_needed_to_train > last_game:
             time.sleep(1)
@@ -135,7 +163,9 @@ def train(config: Config):
         Timer.start("sample")
         samples = []
 
-        games = np.random.choice(last_game, batch_size, p=[moves / total_moves for moves in moves_per_game])
+        games = np.random.choice(
+            last_game, batch_size, p=[moves / total_moves for moves in moves_per_game]
+        )
         samples_per_game = Counter(games)
         for game_number in samples_per_game:
             file = config.paths.replay_buffers / game_filename[game_number]
@@ -156,7 +186,9 @@ def train(config: Config):
 
         # Train the network for one step using the samples
         Timer.start("train")
-        policy_loss, value_loss, total_loss = alphazero_agent.evaluator.train_iteration_v2(samples)
+        policy_loss, value_loss, total_loss = (
+            alphazero_agent.evaluator.train_iteration_v2(samples)
+        )
         training_steps += 1
         time_train = Timer.finish("train")
 
@@ -182,7 +214,9 @@ def train(config: Config):
 
         # Save in ONNX format if enabled
         if config.training.save_onnx:
-            onnx_model_filename = config.paths.checkpoints / f"model_{model_version}.onnx"
+            onnx_model_filename = (
+                config.paths.checkpoints / f"model_{model_version}.onnx"
+            )
             alphazero_agent.save_model_onnx(onnx_model_filename)
 
         # Write latest.yaml after all model files are saved
@@ -204,3 +238,5 @@ def train(config: Config):
     if upload_model_thread and shutdown_event:
         shutdown_event.set()
         upload_model_thread.join()
+
+    Timer.log_totals()

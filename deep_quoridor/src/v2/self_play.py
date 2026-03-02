@@ -20,7 +20,9 @@ def self_play(config: Config):
         for _ in range(n)
     ]
 
-    agent = create_alphazero(config, config.self_play.alphazero, overrides={"training_mode": True})
+    agent = create_alphazero(
+        config, config.self_play.alphazero, overrides={"training_mode": True}
+    )
 
     current_model_version = -1
 
@@ -41,8 +43,10 @@ def self_play(config: Config):
         Timer.start("self-play")
         while not all(finished):
             if ShutdownSignal.is_set(config):
-                print(f"self-play process {os.getpid()} - Interrupted by shutdown signal")
-                return
+                print(
+                    f"self-play process {os.getpid()} - Interrupted by shutdown signal"
+                )
+                break
 
             observations = []
             for i in range(n):
@@ -67,8 +71,15 @@ def self_play(config: Config):
                 environments[env_idx].step(action_index)
 
         agent.end_game_batch_and_save_replay_buffers(
-            config.paths.replay_buffers_tmp, config.paths.replay_buffers_ready, current_model_version
+            config.paths.replay_buffers_tmp,
+            config.paths.replay_buffers_ready,
+            current_model_version,
         )
         num_truncated = n - len(finished_in)
         elapsed = Timer.finish("self-play")
-        print(f"{os.getpid()} - finsihed in {elapsed} {sorted(finished_in)}, {num_truncated}")
+        print(
+            f"{os.getpid()} - finsihed in {elapsed} {sorted(finished_in)}, {num_truncated}"
+        )
+
+    print(f"Self-play process {os.getpid()} timing:")
+    Timer.log_totals()

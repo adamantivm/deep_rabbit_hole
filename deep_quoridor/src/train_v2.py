@@ -4,10 +4,12 @@ import subprocess
 import time
 from pathlib import Path
 
+import yaml
 from v2 import benchmarks, load_config_and_setup_run, self_play, train
 from v2.common import ShutdownSignal
 
 if __name__ == "__main__":
+    t_start = time.perf_counter()
     parser = argparse.ArgumentParser(description="Train Quoridor agent")
     parser.add_argument("config_file", type=str, help="Path to YAML configuration file")
     parser.add_argument(
@@ -126,3 +128,32 @@ if __name__ == "__main__":
         time.sleep(1)
 
     ShutdownSignal.clear(config)
+
+    # === Timing Summary ===
+    wall_clock = time.perf_counter() - t_start
+    games_played = len(list(config.paths.replay_buffers.glob("game_*.npz")))
+    models_trained = len(list(config.paths.checkpoints.glob("model_*.pt"))) - 1  # exclude model_0
+    throughput = games_played / wall_clock if wall_clock > 0 else 0
+    runner = "rust" if rust_binary else "python"
+
+    summary_lines = [
+        "=== Timing Summary ===",
+        f"Runner:          {runner}",
+        f"Wall-clock time: {wall_clock:.1f}s",
+        f"Games played:    {games_played}",
+        f"Throughput:      {throughput:.2f} games/s",
+        f"Models trained:  {models_trained}",
+        "===",
+    ]
+    print("\n".join(summary_lines))
+
+    summary_data = {
+        "runner": runner,
+        "wall_clock_time": round(wall_clock, 1),
+        "games_played": games_played,
+        "throughput": round(throughput, 2),
+        "models_trained": models_trained,
+    }
+    timing_file = config.paths.run_dir / "timing_summary.yaml"
+    with open(timing_file, "w") as f:
+        yaml.safe_dump(summary_data, f, sort_keys=False)

@@ -1,5 +1,8 @@
 //! Evaluator trait and ONNX implementation for MCTS.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
+
 use anyhow::{Context, Result};
 use ort::session::Session;
 
@@ -12,6 +15,29 @@ use crate::grid_helpers::grid_game_state_to_resnet_input;
 /// Returns `(value_for_current_player, masked_softmax_priors)`.
 pub trait Evaluator {
     fn evaluate(&mut self, state: &GameState, action_mask: &[bool]) -> Result<(f32, Vec<f32>)>;
+}
+
+// Global inference timing counters (atomic for thread safety)
+static INFERENCE_COUNT: AtomicU64 = AtomicU64::new(0);
+// Store nanoseconds as u64 to use AtomicU64
+static INFERENCE_NANOS: AtomicU64 = AtomicU64::new(0);
+
+/// Print and reset the accumulated inference timing statistics.
+pub fn print_inference_stats() {
+    let count = INFERENCE_COUNT.swap(0, Ordering::Relaxed);
+    let nanos = INFERENCE_NANOS.swap(0, Ordering::Relaxed);
+    let secs = nanos as f64 / 1_000_000_000.0;
+    if count > 0 {
+        let avg_us = (nanos as f64 / count as f64) / 1_000.0;
+        println!(
+            "=== Rust Inference Stats ===\n\
+             Evaluations: {}\n\
+             Total time:  {:.3}s\n\
+             Avg time:    {:.1}µs\n\
+             ===",
+            count, secs, avg_us
+        );
+    }
 }
 
 /// ONNX-based evaluator for MCTS.
@@ -44,11 +70,15 @@ impl Evaluator for OnnxEvaluator {
         let input_value = ort::value::Value::from_array((shape.as_slice(), data))
             .context("Failed to create ONNX input value")?;
 
-        // Run inference
+        // Run inference (timed)
+        let t0 = Instant::now();
         let outputs = self
             .session
             .run(ort::inputs!["input" => input_value])
             .context("Failed to run ONNX inference")?;
+        let elapsed = t0.elapsed();
+        INFERENCE_COUNT.fetch_add(1, Ordering::Relaxed);
+        INFERENCE_NANOS.fetch_add(elapsed.as_nanos() as u64, Ordering::Relaxed);
 
         // Extract value
         let value_tensor = outputs["value"]

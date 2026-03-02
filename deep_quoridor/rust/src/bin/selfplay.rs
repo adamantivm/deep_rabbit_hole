@@ -36,6 +36,7 @@ use std::path::Path;
 use std::process;
 use std::time::Instant;
 
+use quoridor_rs::agents::alphazero::evaluator::print_inference_stats;
 use quoridor_rs::agents::alphazero::AlphaZeroAgent;
 use quoridor_rs::agents::onnx_agent::OnnxAgent;
 use quoridor_rs::agents::random_agent::RandomAgent;
@@ -266,6 +267,7 @@ fn run_batch(
         "Done. {} games written to {}",
         cli.num_games, cli.output_dir
     );
+    print_inference_stats();
     Ok(())
 }
 
@@ -397,6 +399,7 @@ fn run_continuous(
         game_idx += 1;
     }
 
+    print_inference_stats();
     Ok(())
 }
 
