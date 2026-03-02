@@ -35,6 +35,7 @@ class AlphaZeroBaseConfig(StrictBaseModel):
     network: NetworkConfig = Field(default_factory=MLPConfig, discriminator="type")
     mcts_n: int
     mcts_c_puct: float
+    max_cache_size: Optional[int] = None
 
 
 class UploadModel(StrictBaseModel):

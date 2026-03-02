@@ -16,6 +16,8 @@ class LRUCache:
         return None
 
     def put(self, key, value):
+        if self.max_size == 0:
+            return
         if key in self.cache:
             self.cache.pop(key)
         if len(self.cache) >= self.max_size:

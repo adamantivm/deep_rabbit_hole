@@ -128,6 +128,8 @@ def alphazero_params_dict_from_config(
         "mcts_n": config.alphazero.mcts_n,
         "mcts_ucb_c": config.alphazero.mcts_c_puct,
     }
+    if config.alphazero.max_cache_size is not None:
+        params_dict["max_cache_size"] = config.alphazero.max_cache_size
 
     # Add network config
     if config.alphazero.network.type == "mlp":

@@ -10,13 +10,14 @@ alphazero:
     num_channels: 32
   mcts_n: 50
   mcts_c_puct: 1.2
+  max_cache_size: 0
 self_play:
-  num_workers: 2
-  parallel_games: 2
+  num_workers: 1
+  parallel_games: 1
   alphazero:
     mcts_noise_epsilon: 0.25
 training:
-  finish_after: 3 minutes
+  finish_after: 2 minutes
   games_per_training_step: 8.0
   learning_rate: 0.001
   batch_size: 16
