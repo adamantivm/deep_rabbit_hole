@@ -7,6 +7,7 @@ matplotlib
 numba
 numpy
 open_spiel==1.5
+onnxruntime==1.23.2
 pettingzoo
 prettytable
 pygame
