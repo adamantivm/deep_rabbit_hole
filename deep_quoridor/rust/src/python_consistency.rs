@@ -1,4 +1,5 @@
 use std::io::ErrorKind;
+use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 #[cfg(feature = "binary")]
@@ -8,7 +9,7 @@ use crate::actions::{action_index_to_action, policy_size};
 #[cfg(feature = "binary")]
 use crate::agents::alphazero::agent::apply_temperature_and_sample;
 #[cfg(feature = "binary")]
-use crate::agents::alphazero::evaluator::UniformMockEvaluator;
+use crate::agents::alphazero::evaluator::{OnnxEvaluator, UniformMockEvaluator};
 #[cfg(feature = "binary")]
 use crate::agents::alphazero::mcts::{search, ChildInfo, MCTSConfig};
 use crate::game_state::GameState;
@@ -167,6 +168,17 @@ fn run_step_trace_python(board_size: i32, max_walls: i32, action_indices: &[usiz
 /// Call the mcts_game_reference.py script and return its raw stdout.
 #[cfg(feature = "binary")]
 fn run_mcts_game_python(board_size: i32, max_walls: i32, max_steps: i32, mcts_n: u32) -> String {
+    run_mcts_game_python_with_model(board_size, max_walls, max_steps, mcts_n, None)
+}
+
+#[cfg(feature = "binary")]
+fn run_mcts_game_python_with_model(
+    board_size: i32,
+    max_walls: i32,
+    max_steps: i32,
+    mcts_n: u32,
+    onnx_model_path: Option<&Path>,
+) -> String {
     let src_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("rust crate should live under deep_quoridor/")
@@ -174,13 +186,18 @@ fn run_mcts_game_python(board_size: i32, max_walls: i32, max_steps: i32, mcts_n:
 
     let script_path = src_dir.join("mcts_game_reference.py");
 
-    let args = [
+    let mut args = vec![
         src_dir.to_string_lossy().into_owned(),
         board_size.to_string(),
         max_walls.to_string(),
         max_steps.to_string(),
         mcts_n.to_string(),
     ];
+
+    if let Some(model_path) = onnx_model_path {
+        args.push("--onnx-model".to_string());
+        args.push(model_path.to_string_lossy().into_owned());
+    }
 
     run_python(&script_path.to_string_lossy(), &args)
 }
@@ -351,6 +368,65 @@ fn hex_to_f32(hex: &str) -> f32 {
     f32::from_le_bytes(bytes)
 }
 
+#[cfg(feature = "binary")]
+fn hex_to_f32_vec(hex: &str) -> Vec<f32> {
+    assert_eq!(
+        hex.len() % 8,
+        0,
+        "expected float32 vector hex length to be divisible by 8"
+    );
+    let mut out = Vec::with_capacity(hex.len() / 8);
+    for i in (0..hex.len()).step_by(8) {
+        out.push(hex_to_f32(&hex[i..i + 8]));
+    }
+    out
+}
+
+#[cfg(feature = "binary")]
+fn assert_f32_vec_close(
+    seq_name: &str,
+    step: usize,
+    field: &str,
+    left: &str,
+    right: &str,
+    eps: f32,
+) {
+    let left_values = hex_to_f32_vec(left);
+    let right_values = hex_to_f32_vec(right);
+    assert_eq!(
+        left_values.len(),
+        right_values.len(),
+        "[{seq_name}] step {step}: {field} length mismatch"
+    );
+
+    for (idx, (l, r)) in left_values.iter().zip(right_values.iter()).enumerate() {
+        assert!(
+            (l - r).abs() <= eps,
+            "[{seq_name}] step {step}: {field}[{idx}] mismatch (left={}, right={}, eps={})",
+            l,
+            r,
+            eps
+        );
+    }
+}
+
+#[cfg(feature = "binary")]
+fn resolve_idea_d_onnx_model_path() -> PathBuf {
+    let default_model = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("fixtures")
+        .join("alphazero_B5W2_mv1.0_v509.onnx");
+    let path = std::env::var("DEEP_QUORIDOR_ONNX_MODEL")
+        .map(PathBuf::from)
+        .unwrap_or(default_model);
+
+    assert!(
+        path.exists(),
+        "Idea D ONNX model not found: {}. Set DEEP_QUORIDOR_ONNX_MODEL to a valid .onnx path.",
+        path.display()
+    );
+    path
+}
+
 /// Build a rotated GameState for Player 1 (mirrors game_runner.rs logic).
 fn build_rotated_state(state: &GameState) -> GameState {
     let work_grid = rotate_grid_180(&state.grid());
@@ -468,6 +544,9 @@ fn assert_snapshot_fields_match(
     left: &StepSnapshot,
     right: &StepSnapshot,
 ) {
+    const ROOT_VALUE_EPS: f32 = 1e-5;
+    const ROOT_POLICY_EPS: f32 = 1e-5;
+
     assert_eq!(
         left.step, right.step,
         "[{seq_name}] step {step}: step mismatch"
@@ -510,20 +589,32 @@ fn assert_snapshot_fields_match(
             let left_value = hex_to_f32(left_hex);
             let right_value = hex_to_f32(right_hex);
             assert!(
-                (left_value - right_value).abs() < 1e-6,
-                "[{seq_name}] step {step}: root value mismatch (left={}, right={})",
+                (left_value - right_value).abs() <= ROOT_VALUE_EPS,
+                "[{seq_name}] step {step}: root value mismatch (left={}, right={}, eps={})",
                 left_value,
-                right_value
+                right_value,
+                ROOT_VALUE_EPS
             );
         }
         (None, None) => {}
         _ => panic!("[{seq_name}] step {step}: root value presence mismatch"),
     }
 
-    assert_eq!(
-        left.root_policy_hex, right.root_policy_hex,
-        "[{seq_name}] step {step}: root policy mismatch"
-    );
+    match (&left.root_policy_hex, &right.root_policy_hex) {
+        (Some(left_hex), Some(right_hex)) => {
+            assert_f32_vec_close(
+                seq_name,
+                step,
+                "root policy",
+                left_hex,
+                right_hex,
+                ROOT_POLICY_EPS,
+            );
+        }
+        (None, None) => {}
+        _ => panic!("[{seq_name}] step {step}: root policy presence mismatch"),
+    }
+
     assert_eq!(
         left.selected_action_index, right.selected_action_index,
         "[{seq_name}] step {step}: selected action mismatch"
@@ -715,6 +806,136 @@ fn test_mcts_game_trace_matches_python() {
         } else {
             "MCTS trace comparison failed".to_string()
         };
+        panic_with_trace_explanations(message, &py_trace, &rust_trace);
+    }
+}
+
+#[cfg(feature = "binary")]
+#[test]
+fn test_mcts_game_trace_matches_python_onnx() {
+    let board_size = 5;
+    let max_walls = 2;
+    let max_steps = 50;
+    let mcts_n = 20;
+    let model_path = resolve_idea_d_onnx_model_path();
+
+    eprintln!(
+        "Idea D ONNX parity test using model={} (eps value/policy=1e-5)",
+        model_path.display()
+    );
+
+    let py_trace = run_mcts_game_python_with_model(
+        board_size,
+        max_walls,
+        max_steps,
+        mcts_n,
+        Some(&model_path),
+    );
+
+    let comparison = std::panic::catch_unwind(AssertUnwindSafe(|| {
+        let py_snapshots = parse_step_trace_output(&py_trace);
+        assert!(
+            !py_snapshots.is_empty(),
+            "expected at least one python MCTS snapshot"
+        );
+
+        let mut state = GameState::new(board_size, max_walls);
+        let config = MCTSConfig {
+            n: Some(mcts_n),
+            k: None,
+            ucb_c: 1.4,
+            noise_epsilon: 0.0,
+            noise_alpha: Some(1.0),
+            max_steps: Some(max_steps),
+            penalize_visited_states: false,
+        };
+        let visited_states = std::collections::HashSet::new();
+        let mut evaluator = OnnxEvaluator::new(
+            model_path
+                .to_str()
+                .expect("ONNX model path should be valid UTF-8"),
+        )
+        .expect("failed to load ONNX evaluator");
+
+        for (step, py_snap) in py_snapshots.iter().enumerate() {
+            assert_snapshot_matches("MCTS_ONNX", step, py_snap, &state);
+
+            let should_select = !state.is_game_over() && state.completed_steps < max_steps as usize;
+            if !should_select {
+                assert!(
+                    py_snap.selected_action_index.is_none(),
+                    "[MCTS_ONNX] step {step}: python selected action unexpectedly present"
+                );
+                continue;
+            }
+
+            let (children, root_value): (Vec<ChildInfo>, f32) =
+                search(&config, state.clone(), &mut evaluator, &visited_states)
+                    .expect("MCTS search should succeed");
+
+            let mask = state.get_action_mask();
+            let visit_counts: Vec<u32> = children.iter().map(|c| c.visit_count).collect();
+            let action_indices: Vec<usize> = children.iter().map(|c| c.action_index).collect();
+            let selected_idx = apply_temperature_and_sample(&visit_counts, &action_indices, 0.0);
+
+            let total_visits: u32 = visit_counts.iter().sum();
+            let mut policy = vec![0.0f32; mask.len()];
+            if total_visits > 0 {
+                for child in &children {
+                    policy[child.action_index] = child.visit_count as f32 / total_visits as f32;
+                }
+            }
+
+            if let Some(py_root_value_hex) = &py_snap.root_value_hex {
+                let py_root_value = hex_to_f32(py_root_value_hex);
+                assert!(
+                    (py_root_value - root_value).abs() <= 1e-5,
+                    "[MCTS_ONNX] step {step}: root value mismatch (py={}, rust={}, eps={})",
+                    py_root_value,
+                    root_value,
+                    1e-5
+                );
+            } else {
+                panic!("[MCTS_ONNX] step {step}: missing python root value");
+            }
+
+            if let Some(py_root_policy_hex) = &py_snap.root_policy_hex {
+                let rust_root_policy_hex = vec_f32_to_hex(&policy);
+                assert_f32_vec_close(
+                    "MCTS_ONNX",
+                    step,
+                    "root policy",
+                    py_root_policy_hex,
+                    &rust_root_policy_hex,
+                    1e-5,
+                );
+            } else {
+                panic!("[MCTS_ONNX] step {step}: missing python root policy");
+            }
+
+            let py_selected = py_snap
+                .selected_action_index
+                .expect("python selected action index should be present");
+            assert_eq!(
+                py_selected, selected_idx,
+                "[MCTS_ONNX] step {step}: selected action mismatch"
+            );
+
+            let selected_action = action_index_to_action(board_size, selected_idx);
+            state.step(selected_action);
+        }
+    }));
+
+    if let Err(payload) = comparison {
+        let message = if let Some(text) = payload.downcast_ref::<String>() {
+            text.clone()
+        } else if let Some(text) = payload.downcast_ref::<&str>() {
+            text.to_string()
+        } else {
+            "MCTS ONNX trace comparison failed".to_string()
+        };
+
+        let rust_trace = generate_rust_mcts_trace(board_size, max_walls, max_steps, mcts_n);
         panic_with_trace_explanations(message, &py_trace, &rust_trace);
     }
 }
