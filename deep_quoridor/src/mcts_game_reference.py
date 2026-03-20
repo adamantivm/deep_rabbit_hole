@@ -27,6 +27,11 @@ from pathlib import Path
 import numpy as np
 import torch
 
+try:
+    import onnxruntime as ort
+except ImportError:
+    ort = None
+
 
 src_dir = Path(".")
 
@@ -56,6 +61,45 @@ class UniformMockNNEvaluator:
                 prior = np.zeros_like(mask, dtype=np.float32)
             values.append(np.float32(0.0))
             priors.append(prior.astype(np.float32))
+        return values, priors
+
+
+class OnnxNNEvaluator:
+    """ONNX Runtime evaluator that matches the MCTS evaluator interface."""
+
+    def __init__(self, model_path: Path, net):
+        if ort is None:
+            raise RuntimeError(
+                "onnxruntime is required for ONNX trace mode. Install it in the current Python environment."
+            )
+        self.model_path = model_path
+        self.net = net
+        self.session = ort.InferenceSession(str(model_path))
+
+    def evaluate_batch(self, games):
+        values = []
+        priors = []
+        for game in games:
+            input_array = self.net.game_to_input_array(game)
+            input_batch = np.expand_dims(input_array.astype(np.float32), axis=0)
+            outputs = self.session.run(["policy_logits", "value"], {"input": input_batch})
+
+            policy_logits = np.asarray(outputs[0], dtype=np.float32).reshape(-1)
+            value = np.asarray(outputs[1], dtype=np.float32).reshape(-1)[0]
+
+            mask = np.asarray(game.get_action_mask(), dtype=bool)
+            masked_logits = np.where(mask, policy_logits, -1e32)
+            max_logit = float(masked_logits.max())
+            exps = np.exp(masked_logits - max_logit).astype(np.float32)
+            exps = np.where(mask, exps, 0.0)
+            denom = float(exps.sum())
+            if denom > 0.0:
+                prior = (exps / denom).astype(np.float32)
+            else:
+                prior = np.zeros_like(policy_logits, dtype=np.float32)
+
+            values.append(np.float32(value))
+            priors.append(prior)
         return values, priors
 
 
@@ -134,12 +178,23 @@ def emit_snapshot(game, step, net, player_enum):
         print(f"RT,{step},{tensor_to_hex(rtensor)}")
 
 
-def create_runner(board_size: int, max_walls: int, max_steps: int, mcts_n: int):
+def create_runner(
+    board_size: int,
+    max_walls: int,
+    max_steps: int,
+    mcts_n: int,
+    onnx_model: Path | None,
+):
     MCTS, ResnetConfig, ResnetNetwork, ActionEncoder, Board, Player, Quoridor = configure_imports(src_dir)
     encoder = ActionEncoder(board_size)
     dummy_device = torch.device("cpu")
     net = ResnetNetwork(encoder, dummy_device, ResnetConfig(num_blocks=1, num_channels=1))
-    evaluator = UniformMockNNEvaluator()
+    if onnx_model is None:
+        evaluator = UniformMockNNEvaluator()
+    else:
+        if not onnx_model.exists():
+            raise FileNotFoundError(f"ONNX model not found: {onnx_model}")
+        evaluator = OnnxNNEvaluator(onnx_model, net)
     mcts = MCTS(
         n=mcts_n,
         k=None,
@@ -160,8 +215,14 @@ def create_runner(board_size: int, max_walls: int, max_steps: int, mcts_n: int):
     }
 
 
-def emit_trace(board_size: int, max_walls: int, max_steps: int, mcts_n: int):
-    runner = create_runner(board_size, max_walls, max_steps, mcts_n)
+def emit_trace(
+    board_size: int,
+    max_walls: int,
+    max_steps: int,
+    mcts_n: int,
+    onnx_model: Path | None,
+):
+    runner = create_runner(board_size, max_walls, max_steps, mcts_n, onnx_model)
     encoder = runner["encoder"]
     net = runner["net"]
     mcts = runner["mcts"]
@@ -292,9 +353,7 @@ def explain_trace_steps(metadata, steps, trace_path: Path):
             )
 
         for _, idx, visits_text, probability, action_text in sorted(explained_children)[:12]:
-            print(
-                f"child idx={idx} visits~={visits_text} prob={probability:.8f} action={action_text}"
-            )
+            print(f"child idx={idx} visits~={visits_text} prob={probability:.8f} action={action_text}")
 
 
 def explain_trace_file(trace_path: Path):
@@ -311,18 +370,33 @@ def parse_cli_args(argv: list[str]):
             "trace_path": Path(argv[3]),
         }
 
-    if len(argv) >= 6:
+    onnx_model = None
+    filtered = [argv[0]]
+    i = 1
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--onnx-model":
+            if i + 1 >= len(argv):
+                raise SystemExit("--onnx-model requires a path argument")
+            onnx_model = Path(argv[i + 1])
+            i += 2
+            continue
+        filtered.append(arg)
+        i += 1
+
+    if len(filtered) >= 6:
         return {
             "mode": "emit-trace",
-            "src_dir": Path(argv[1]),
-            "board_size": int(argv[2]),
-            "max_walls": int(argv[3]),
-            "max_steps": int(argv[4]),
-            "mcts_n": int(argv[5]),
+            "src_dir": Path(filtered[1]),
+            "board_size": int(filtered[2]),
+            "max_walls": int(filtered[3]),
+            "max_steps": int(filtered[4]),
+            "mcts_n": int(filtered[5]),
+            "onnx_model": onnx_model,
         }
 
     raise SystemExit(
-        "usage: python mcts_game_reference.py <src_dir> <board_size> <max_walls> <max_steps> <mcts_n> | --explain-trace <src_dir> <trace_path>"
+        "usage: python mcts_game_reference.py [--onnx-model <path>] <src_dir> <board_size> <max_walls> <max_steps> <mcts_n> | --explain-trace <src_dir> <trace_path>"
     )
 
 
@@ -340,6 +414,7 @@ def main(argv: list[str]):
         parsed["max_walls"],
         parsed["max_steps"],
         parsed["mcts_n"],
+        parsed["onnx_model"],
     )
 
 
