@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use ort::session::Session;
+use ort::{ep, session::Session};
 
 use crate::agents::onnx_agent::softmax;
 use crate::game_state::GameState;
@@ -36,6 +36,11 @@ impl OnnxEvaluator {
     pub fn new(model_path: &str) -> Result<Self> {
         let session = Session::builder()
             .context("Failed to create ONNX session builder")?
+            .with_execution_providers([
+                ep::CUDA::default().with_device_id(0).build(),
+                ep::CPU::default().build(),
+            ])
+            .context("Failed to configure ONNX execution providers")?
             .commit_from_file(model_path)
             .context("Failed to load ONNX model")?;
         Ok(Self {

@@ -31,7 +31,7 @@ rayon = "1.10"
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 clap = { version = "4.5", features = ["derive"], optional = true }
-ort = { version = "2.0.0-rc.11", optional = true }
+ort = { version = "2.0.0-rc.11", optional = true, features = ["cuda"] }
 anyhow = "1"
 serde_yaml = { version = "0.9", optional = true }
 ndarray-npy = { version = "0.9", optional = true }
