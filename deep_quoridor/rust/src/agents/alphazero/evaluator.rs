@@ -40,7 +40,7 @@ impl OnnxEvaluator {
                 ep::CUDA::default().with_device_id(0).build(),
                 ep::CPU::default().build(),
             ])
-            .context("Failed to configure ONNX execution providers")?
+            .map_err(|e| anyhow::anyhow!("Failed to configure ONNX execution providers: {}", e))?
             .commit_from_file(model_path)
             .context("Failed to load ONNX model")?;
         Ok(Self {
