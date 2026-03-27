@@ -117,31 +117,27 @@ impl QGameMechanics {
         // Check for parallel wall extensions
         if orientation == WALL_VERTICAL {
             // Check if vertical wall above conflicts (shares middle section)
-            if row > 0 {
-                if self.repr.get_wall(data, row - 1, col, orientation) {
+            if row > 0
+                && self.repr.get_wall(data, row - 1, col, orientation) {
                     return false;
                 }
-            }
             // Check if vertical wall below conflicts (shares middle section)
-            if row < board_size - 2 {
-                if self.repr.get_wall(data, row + 1, col, orientation) {
+            if row < board_size - 2
+                && self.repr.get_wall(data, row + 1, col, orientation) {
                     return false;
                 }
-            }
         } else {
             // WALL_HORIZONTAL
             // Check if horizontal wall to the left conflicts (shares middle section)
-            if col > 0 {
-                if self.repr.get_wall(data, row, col - 1, orientation) {
+            if col > 0
+                && self.repr.get_wall(data, row, col - 1, orientation) {
                     return false;
                 }
-            }
             // Check if horizontal wall to the right conflicts (shares middle section)
-            if col < board_size - 2 {
-                if self.repr.get_wall(data, row, col + 1, orientation) {
+            if col < board_size - 2
+                && self.repr.get_wall(data, row, col + 1, orientation) {
                     return false;
                 }
-            }
         }
 
         true
@@ -178,39 +174,35 @@ impl QGameMechanics {
                 // Moving right - check for vertical wall to the right of from_cell
                 if from_col < board_size - 1 {
                     // Check wall at (from_row, from_col) vertical
-                    if from_row < board_size - 1 {
-                        if self.repr.get_wall(data, from_row, from_col, WALL_VERTICAL) {
+                    if from_row < board_size - 1
+                        && self.repr.get_wall(data, from_row, from_col, WALL_VERTICAL) {
                             return true;
                         }
-                    }
                     // Check wall at (from_row-1, from_col) vertical (extends downward)
-                    if from_row > 0 {
-                        if self
+                    if from_row > 0
+                        && self
                             .repr
                             .get_wall(data, from_row - 1, from_col, WALL_VERTICAL)
                         {
                             return true;
                         }
-                    }
                 }
             } else if to_col + 1 == from_col {
                 // Moving left - check for vertical wall to the left of from_cell
                 if to_col < board_size - 1 {
                     // Check wall at (from_row, to_col) vertical
-                    if from_row < board_size - 1 {
-                        if self.repr.get_wall(data, from_row, to_col, WALL_VERTICAL) {
+                    if from_row < board_size - 1
+                        && self.repr.get_wall(data, from_row, to_col, WALL_VERTICAL) {
                             return true;
                         }
-                    }
                     // Check wall at (from_row-1, to_col) vertical (extends downward)
-                    if from_row > 0 {
-                        if self
+                    if from_row > 0
+                        && self
                             .repr
                             .get_wall(data, from_row - 1, to_col, WALL_VERTICAL)
                         {
                             return true;
                         }
-                    }
                 }
             }
         } else if from_col == to_col {
@@ -219,42 +211,38 @@ impl QGameMechanics {
                 // Moving down - check for horizontal wall below from_cell
                 if from_row < board_size - 1 {
                     // Check wall at (from_row, from_col) horizontal
-                    if from_col < board_size - 1 {
-                        if self
+                    if from_col < board_size - 1
+                        && self
                             .repr
                             .get_wall(data, from_row, from_col, WALL_HORIZONTAL)
                         {
                             return true;
                         }
-                    }
                     // Check wall at (from_row, from_col-1) horizontal (extends rightward)
-                    if from_col > 0 {
-                        if self
+                    if from_col > 0
+                        && self
                             .repr
                             .get_wall(data, from_row, from_col - 1, WALL_HORIZONTAL)
                         {
                             return true;
                         }
-                    }
                 }
             } else if to_row + 1 == from_row {
                 // Moving up - check for horizontal wall above from_cell
                 if to_row < board_size - 1 {
                     // Check wall at (to_row, from_col) horizontal
-                    if from_col < board_size - 1 {
-                        if self.repr.get_wall(data, to_row, from_col, WALL_HORIZONTAL) {
+                    if from_col < board_size - 1
+                        && self.repr.get_wall(data, to_row, from_col, WALL_HORIZONTAL) {
                             return true;
                         }
-                    }
                     // Check wall at (to_row, from_col-1) horizontal (extends rightward)
-                    if from_col > 0 {
-                        if self
+                    if from_col > 0
+                        && self
                             .repr
                             .get_wall(data, to_row, from_col - 1, WALL_HORIZONTAL)
                         {
                             return true;
                         }
-                    }
                 }
             }
         }

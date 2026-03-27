@@ -151,10 +151,8 @@ fn minimax_inner(
             if child_value > best_value {
                 best_value = child_value;
             }
-        } else {
-            if child_value < best_value {
-                best_value = child_value;
-            }
+        } else if child_value < best_value {
+            best_value = child_value;
         }
     }
 

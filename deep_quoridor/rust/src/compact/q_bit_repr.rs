@@ -63,7 +63,7 @@ impl QBitRepr {
         let completed_steps_offset = current_player_offset + 1;
 
         let total_bits = completed_steps_offset + completed_steps_bits;
-        let total_bytes = (total_bits + 7) / 8;
+        let total_bytes = total_bits.div_ceil(8);
 
         Self {
             board_size,
@@ -322,13 +322,11 @@ impl QBitRepr {
         let steps = self.get_completed_steps(data);
 
         // Build metadata lines
-        let meta_lines = vec![
-            format!("Steps: {}", steps),
+        let meta_lines = [format!("Steps: {}", steps),
             format!("Current: P{}", current_player + 1),
             format!("P1 walls: {}", p0_walls),
             format!("P2 walls: {}", p1_walls),
-            format!("Max steps: {}", self.max_steps),
-        ];
+            format!("Max steps: {}", self.max_steps)];
 
         let mut line_idx = 0;
 

@@ -52,7 +52,7 @@ fn gaussian_wall_weights(
     // Normalize weights
     let weights_sum: f32 = weights.sum();
     if weights_sum > 0.0 {
-        weights = weights / weights_sum;
+        weights /= weights_sum;
     } else {
         weights.fill(1.0 / num_actions as f32);
     }

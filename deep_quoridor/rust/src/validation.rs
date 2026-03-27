@@ -48,38 +48,38 @@ pub fn is_move_action_valid(
     // Single step moves
     if delta_i == 2 && delta_j == 0 {
         // Down
-        return grid[[player_i as usize + 1, player_j as usize]] == CELL_FREE;
+        grid[[player_i as usize + 1, player_j as usize]] == CELL_FREE
     } else if delta_i == -2 && delta_j == 0 {
         // Up
-        return grid[[player_i as usize - 1, player_j as usize]] == CELL_FREE;
+        grid[[player_i as usize - 1, player_j as usize]] == CELL_FREE
     } else if delta_i == 0 && delta_j == 2 {
         // Right
-        return grid[[player_i as usize, player_j as usize + 1]] == CELL_FREE;
+        grid[[player_i as usize, player_j as usize + 1]] == CELL_FREE
     } else if delta_i == 0 && delta_j == -2 {
         // Left
-        return grid[[player_i as usize, player_j as usize - 1]] == CELL_FREE;
+        grid[[player_i as usize, player_j as usize - 1]] == CELL_FREE
     }
     // Jump over opponent (straight)
     else if delta_i == 4 && delta_j == 0 {
         // Down jump
-        return grid[[player_i as usize + 1, player_j as usize]] == CELL_FREE
+        grid[[player_i as usize + 1, player_j as usize]] == CELL_FREE
             && grid[[player_i as usize + 2, player_j as usize]] as i32 == opponent
-            && grid[[player_i as usize + 3, player_j as usize]] == CELL_FREE;
+            && grid[[player_i as usize + 3, player_j as usize]] == CELL_FREE
     } else if delta_i == -4 && delta_j == 0 {
         // Up jump
-        return grid[[player_i as usize - 1, player_j as usize]] == CELL_FREE
+        grid[[player_i as usize - 1, player_j as usize]] == CELL_FREE
             && grid[[player_i as usize - 2, player_j as usize]] as i32 == opponent
-            && grid[[player_i as usize - 3, player_j as usize]] == CELL_FREE;
+            && grid[[player_i as usize - 3, player_j as usize]] == CELL_FREE
     } else if delta_i == 0 && delta_j == 4 {
         // Right jump
-        return grid[[player_i as usize, player_j as usize + 1]] == CELL_FREE
+        grid[[player_i as usize, player_j as usize + 1]] == CELL_FREE
             && grid[[player_i as usize, player_j as usize + 2]] as i32 == opponent
-            && grid[[player_i as usize, player_j as usize + 3]] == CELL_FREE;
+            && grid[[player_i as usize, player_j as usize + 3]] == CELL_FREE
     } else if delta_i == 0 && delta_j == -4 {
         // Left jump
-        return grid[[player_i as usize, player_j as usize - 1]] == CELL_FREE
+        grid[[player_i as usize, player_j as usize - 1]] == CELL_FREE
             && grid[[player_i as usize, player_j as usize - 2]] as i32 == opponent
-            && grid[[player_i as usize, player_j as usize - 3]] == CELL_FREE;
+            && grid[[player_i as usize, player_j as usize - 3]] == CELL_FREE
     }
     // Diagonal jumps (when opponent is adjacent and there's a wall behind them)
     else if delta_i == 2 && delta_j == 2 {

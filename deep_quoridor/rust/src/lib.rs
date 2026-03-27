@@ -430,7 +430,7 @@ fn policy_db_lookup<'py>(
     let cp = current_player as usize;
 
     // Get all valid actions for current player
-    let moves = mechanics.get_valid_moves(&mut data);
+    let moves = mechanics.get_valid_moves(&data);
     let walls = mechanics.get_valid_wall_placements(&mut data);
 
     let mut actions: Vec<(u8, u8, u8)> = moves
