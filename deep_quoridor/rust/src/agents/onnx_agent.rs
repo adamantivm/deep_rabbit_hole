@@ -28,7 +28,10 @@ impl OnnxAgent {
         let session = Session::builder()
             .context("Failed to create ONNX session builder")?
             .with_execution_providers([
-                ep::CUDA::default().with_device_id(0).build(),
+                ep::CUDA::default()
+                    .with_device_id(0)
+                    .build()
+                    .error_on_failure(),
                 ep::CPU::default().build(),
             ])
             .map_err(|e| anyhow::anyhow!("Failed to configure ONNX execution providers: {}", e))?
